@@ -3,8 +3,8 @@
 set -e
 
 # Download URLs - Update these with your actual hosted file URLs
-BINARY_URL="https://example.com/dyndns-client-linux"
-INSTALL_SCRIPT_URL="https://example.com/install.sh"
+BINARY_URL="https://raw.githubusercontent.com/LucazPlays/dyndnsclient/refs/heads/main/dyndns-client-linux"
+INSTALL_SCRIPT_URL="https://raw.githubusercontent.com/LucazPlays/dyndnsclient/refs/heads/main/install.sh"
 
 BINARY_NAME="dyndns-client"
 INSTALL_SCRIPT="install.sh"
