@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
+	"io"
 	"log"
+	"net"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -73,14 +78,14 @@ func runDaemon() {
 }
 
 func updateDNS(config *Config) {
-	var addresses []string
+	vals := url.Values{}
 
 	if config.IPVersion == 4 || config.IPVersion == 46 {
 		ipv4, err := getIPv4Address()
 		if err != nil {
 			log.Printf("Failed to get IPv4: %v", err)
 		} else if ipv4 != "" {
-			addresses = append(addresses, "ipv4="+ipv4)
+			vals.Set("ipv4", ipv4)
 			log.Printf("Got IPv4: %s", ipv4)
 		}
 	}
@@ -90,80 +95,144 @@ func updateDNS(config *Config) {
 		if err != nil {
 			log.Printf("Failed to get IPv6: %v", err)
 		} else if ipv6 != "" {
-			addresses = append(addresses, "ipv6="+ipv6)
+			vals.Set("ipv6", ipv6)
 			log.Printf("Got IPv6: %s", ipv6)
 		}
 	}
 
-	if len(addresses) == 0 {
+	if len(vals) == 0 {
 		log.Println("No addresses found")
 		return
 	}
 
 	oldAddr := loadLastAddress()
-	newAddr := strings.Join(addresses, "&")
+	newAddr := vals.Encode()
 
 	if oldAddr == newAddr && oldAddr != "" {
 		log.Println("Address unchanged, skipping update")
 		return
 	}
 
-	url := fmt.Sprintf("https://dynv6.com/api/update?hostname=%s&token=%s&%s",
-		config.Hostname, config.Token, strings.Join(addresses, "&"))
+	u := &url.URL{
+		Scheme: "https",
+		Host:   "dynv6.com",
+		Path:   "/api/update",
+	}
+	q := u.Query()
+	q.Set("hostname", config.Hostname)
+	q.Set("token", config.Token)
+	for k, vs := range vals {
+		for _, v := range vs {
+			q.Add(k, v)
+		}
+	}
+	u.RawQuery = q.Encode()
 
 	log.Printf("Sending update to DynV6...")
-	resp, err := sendRequest(url)
+	status, body, err := sendRequest(u.String())
 	if err != nil {
 		log.Printf("Failed to send update: %v", err)
 		return
 	}
 
-	log.Printf("DynV6 response: %s", resp)
+	log.Printf("DynV6 response (%d): %s", status, body)
+	if status < 200 || status >= 300 {
+		log.Printf("Update failed with status %d", status)
+		return
+	}
+
 	saveLastAddress(newAddr)
 	log.Println("Update successful")
 }
 
 func getIPv4Address() (string, error) {
-	cmd := exec.Command("curl", "-s", "https://api.ipify.org")
-	output, err := cmd.Output()
+	// Prefer using an HTTP client instead of calling out to curl
+	resp, err := http.Get("https://api.ipify.org")
 	if err != nil {
 		return "", err
 	}
-	ip := strings.TrimSpace(string(output))
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return "", fmt.Errorf("unexpected status: %d", resp.StatusCode)
+	}
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	ip := strings.TrimSpace(string(b))
 	if ip == "" {
 		return "", fmt.Errorf("empty IPv4 response")
+	}
+	// validate basic IP
+	if net.ParseIP(ip) == nil {
+		return "", fmt.Errorf("invalid IPv4 response: %s", ip)
 	}
 	return ip, nil
 }
 
 func getIPv6Address() (string, error) {
+	// Try to read from 'ip' command, fall back to using net.Interfaces
 	cmd := exec.Command("ip", "-6", "addr", "list", "scope", "global")
 	output, err := cmd.Output()
+	if err == nil {
+		lines := strings.Split(string(output), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "inet6") {
+				fields := strings.Fields(line)
+				if len(fields) >= 2 {
+					addr := fields[1]
+					// strip prefix length
+					if i := strings.Index(addr, "/"); i != -1 {
+						addr = addr[:i]
+					}
+					if ip := net.ParseIP(addr); ip != nil && ip.To16() != nil {
+						return addr, nil
+					}
+				}
+			}
+		}
+	}
+
+	// Fallback: enumerate interfaces
+	ifs, err := net.Interfaces()
 	if err != nil {
 		return "", err
 	}
-
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		if strings.Contains(line, "inet6") && !strings.HasPrefix(line, "\tf") {
-			fields := strings.Fields(line)
-			for _, field := range fields {
-				if strings.HasPrefix(field, "2") || strings.HasPrefix(field, "1") {
-					return strings.TrimSuffix(field, "/128"), nil
-				}
+	for _, itf := range ifs {
+		addrs, _ := itf.Addrs()
+		for _, a := range addrs {
+			s := a.String()
+			if idx := strings.Index(s, "/"); idx != -1 {
+				s = s[:idx]
+			}
+			ip := net.ParseIP(s)
+			if ip != nil && ip.To16() != nil && ip.To4() == nil {
+				return s, nil
 			}
 		}
 	}
 	return "", fmt.Errorf("no IPv6 address found")
 }
 
-func sendRequest(url string) (string, error) {
-	cmd := exec.Command("curl", "-s", "-w", "\n%{http_code}", url)
-	output, err := cmd.Output()
+func sendRequest(u string) (int, string, error) {
+	// Use net/http client
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, "GET", u, nil)
 	if err != nil {
-		return "", err
+		return 0, "", err
 	}
-	return string(output), nil
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return 0, "", err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, "", err
+	}
+	return resp.StatusCode, string(b), nil
 }
 
 func loadConfig() (*Config, error) {
@@ -200,14 +269,24 @@ func loadConfig() (*Config, error) {
 }
 
 func loadLastAddress() string {
-	home, _ := os.UserHomeDir()
-	data, _ := os.ReadFile(filepath.Join(home, ".dyndns-client.addr"))
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	data, err := os.ReadFile(filepath.Join(home, ".dyndns-client.addr"))
+	if err != nil {
+		return ""
+	}
 	return strings.TrimSpace(string(data))
 }
 
 func saveLastAddress(addr string) {
-	home, _ := os.UserHomeDir()
-	os.WriteFile(filepath.Join(home, ".dyndns-client.addr"), []byte(addr), 0644)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+	// ignore error when writing cache
+	_ = os.WriteFile(filepath.Join(home, ".dyndns-client.addr"), []byte(addr), 0600)
 }
 
 func serviceAction(action string) error {

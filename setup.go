@@ -61,7 +61,8 @@ func runSetup() error {
 	config := fmt.Sprintf("hostname=%s\ntoken=%s\nip_version=%d\ninterval=%d\n",
 		hostname, token, ipVersion, interval)
 
-	if err := os.WriteFile("/etc/dyndns-client.conf", []byte(config), 0644); err != nil {
+	// Save config with restricted permissions
+	if err := os.WriteFile("/etc/dyndns-client.conf", []byte(config), 0600); err != nil {
 		return fmt.Errorf("failed to write config: %v", err)
 	}
 
