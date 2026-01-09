@@ -1,5 +1,11 @@
 # DynDNS Client
 
+**Quick install:** Download and run the internet installer in one line:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/LucazPlays/dyndnsclient/refs/heads/main/internet-install.sh | sudo bash
+```
+
 A Dynamic DNS client written in Go for Linux Debian with systemd support.
 
 ## Features
