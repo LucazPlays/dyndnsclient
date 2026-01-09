@@ -23,10 +23,16 @@ type Config struct {
 	Interval  int
 }
 
+const (
+	defaultBinaryURL   = "https://raw.githubusercontent.com/LucazPlays/dyndnsclient/refs/heads/main/dyndns-client-linux"
+	defaultInstallPath = "/usr/local/bin/dyndns-client"
+)
+
 func main() {
 	setupCmd := flag.Bool("setup", false, "Run setup wizard")
 	installCmd := flag.Bool("install", false, "Install as systemd service")
 	uninstallCmd := flag.Bool("uninstall", false, "Uninstall systemd service")
+	updateCmd := flag.Bool("update", false, "Self-update installed binary from GitHub")
 	serviceCmd := flag.String("service", "", "Service action: start, stop, restart, status")
 	flag.Parse()
 
@@ -48,6 +54,14 @@ func main() {
 		if err := uninstallService(); err != nil {
 			log.Fatalf("Uninstall failed: %v", err)
 		}
+		os.Exit(0)
+	}
+
+	if *updateCmd {
+		if err := performSelfUpdate(); err != nil {
+			log.Fatalf("Update failed: %v", err)
+		}
+		fmt.Println("Update successful")
 		os.Exit(0)
 	}
 
@@ -302,4 +316,89 @@ func serviceAction(action string) error {
 	default:
 		return fmt.Errorf("unknown action: %s", action)
 	}
+}
+
+func performSelfUpdate() error {
+	if os.Geteuid() != 0 {
+		return fmt.Errorf("this operation requires root privileges. Use sudo")
+	}
+
+	// Download to a temporary file
+	tmpFile := "/tmp/dyndns-client.new"
+	bakFile := "/usr/local/bin/dyndns-client.bak"
+	installPath := defaultInstallPath
+
+	resp, err := http.Get(defaultBinaryURL)
+	if err != nil {
+		return fmt.Errorf("failed to download binary: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("failed to download binary: status %d", resp.StatusCode)
+	}
+
+	f, err := os.Create(tmpFile)
+	if err != nil {
+		return fmt.Errorf("failed to create tmp file: %v", err)
+	}
+	defer f.Close()
+
+	n, err := io.Copy(f, resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to write tmp file: %v", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("downloaded file is empty")
+	}
+
+	if err := f.Chmod(0755); err != nil {
+		return fmt.Errorf("failed to set executable bit: %v", err)
+	}
+
+	// Backup existing binary
+	if _, err := os.Stat(installPath); err == nil {
+		if err := copyFile(installPath, bakFile); err != nil {
+			return fmt.Errorf("failed to backup existing binary: %v", err)
+		}
+	}
+
+	// Replace binary
+	if err := os.Rename(tmpFile, installPath); err != nil {
+		// try to restore backup
+		_ = os.Rename(bakFile, installPath)
+		return fmt.Errorf("failed to replace binary: %v", err)
+	}
+
+	if err := os.Chown(installPath, 0, 0); err != nil {
+		return fmt.Errorf("failed to chown installed binary: %v", err)
+	}
+
+	if err := os.Chmod(installPath, 0755); err != nil {
+		return fmt.Errorf("failed to chmod installed binary: %v", err)
+	}
+
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	srcF, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer srcF.Close()
+
+	dstF, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer dstF.Close()
+
+	if _, err := io.Copy(dstF, srcF); err != nil {
+		return err
+	}
+	fi, err := srcF.Stat()
+	if err == nil {
+		_ = dstF.Chmod(fi.Mode())
+	}
+	return nil
 }

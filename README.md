@@ -43,6 +43,25 @@ sudo cp dyndns-client /usr/local/bin/
 sudo chmod +x /usr/local/bin/dyndns-client
 ```
 
+### Internet installer
+
+You can install directly from the raw GitHub files (useful for quick installs):
+
+```bash
+# Run the internet installer which downloads the binary and runs the installer
+wget -qO- https://raw.githubusercontent.com/LucazPlays/dyndnsclient/refs/heads/main/internet-install.sh | sudo bash
+```
+
+### Self-update (from raw GitHub)
+
+If you installed via the internet installer, you can update the installed binary using the update script:
+
+```bash
+sudo /usr/local/bin/dyndns-client --update
+```
+
+The update command downloads the latest prebuilt binary from the repository's main branch and replaces the installed binary. Make sure you trust the source and run this on a machine you control.
+
 ## Configuration
 
 ### Interactive Setup
