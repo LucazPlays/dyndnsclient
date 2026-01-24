@@ -6,6 +6,23 @@ BINARY_NAME="dyndns-client"
 INSTALL_DIR="/usr/local/bin"
 SERVICE_NAME="dyndns-client"
 
+RUN_SETUP=false
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --with-setup)
+            RUN_SETUP=true
+            shift
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Usage: sudo $0 [--with-setup]"
+            exit 1
+            ;;
+    esac
+done
+
 echo "==================================="
 echo "DynDNS Client Installation Script"
 echo "==================================="
@@ -32,17 +49,22 @@ echo "Installing binary to $INSTALL_DIR/$BINARY_NAME..."
 cp "$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
 chmod +x "$INSTALL_DIR/$BINARY_NAME"
 
-# Install systemd service (optional, done via --install flag)
 echo ""
 echo "Installation complete!"
 echo ""
-echo "Usage:"
-echo "  $INSTALL_DIR/$BINARY_NAME --setup    - Configure the client interactively"
-echo "  $INSTALL_DIR/$BINARY_NAME --install  - Install as systemd service"
-echo "  $INSTALL_DIR/$BINARY_NAME --uninstall - Remove systemd service"
-echo "  sudo systemctl start $SERVICE_NAME   - Start the service"
-echo "  sudo systemctl stop $SERVICE_NAME    - Stop the service"
-echo "  sudo systemctl restart $SERVICE_NAME - Restart the service"
-echo ""
+
+if [ "$RUN_SETUP" = true ]; then
+    echo "Running setup wizard..."
+    "$INSTALL_DIR/$BINARY_NAME" --setup
+else
+    echo "Usage:"
+    echo "  $INSTALL_DIR/$BINARY_NAME --setup    - Configure the client interactively"
+    echo "  $INSTALL_DIR/$BINARY_NAME --install  - Install as systemd service"
+    echo "  $INSTALL_DIR/$BINARY_NAME --uninstall - Remove systemd service"
+    echo "  sudo systemctl start $SERVICE_NAME   - Start the service"
+    echo "  sudo systemctl stop $SERVICE_NAME    - Stop the service"
+    echo "  sudo systemctl restart $SERVICE_NAME - Restart the service"
+    echo ""
+fi
 
 exit 0

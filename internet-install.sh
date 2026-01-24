@@ -33,8 +33,8 @@ echo "Downloading install script from $INSTALL_SCRIPT_URL..."
 wget -q -O "$INSTALL_SCRIPT" "$INSTALL_SCRIPT_URL"
 chmod +x "$INSTALL_SCRIPT"
 
-echo "Running installation script..."
-sudo bash "$INSTALL_SCRIPT"
+echo "Running installation script with setup..."
+sudo bash "$INSTALL_SCRIPT" --with-setup
 
 echo ""
 echo "Internet installation complete!"
