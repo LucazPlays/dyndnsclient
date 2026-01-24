@@ -7,9 +7,17 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"golang.org/x/term"
 )
 
 func runSetup() error {
+	fd := int(os.Stdin.Fd())
+	oldState, err := term.MakeRaw(fd)
+	if err == nil {
+		defer term.Restore(fd, oldState)
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println("=== DynDNS Client Setup ===")
