@@ -221,7 +221,7 @@ func getIPv6Address() (string, error) {
 				s = s[:idx]
 			}
 			ip := net.ParseIP(s)
-			if ip != nil && ip.To16() != nil && ip.To4() == nil {
+			if ip != nil && ip.To16() != nil && ip.To4() == nil && !ip.IsLoopback() {
 				return s, nil
 			}
 		}
