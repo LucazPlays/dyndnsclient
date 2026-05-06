@@ -1,42 +1,63 @@
 package system
 
 import (
-	"bufio"
 	"fmt"
 	"os"
 	"strings"
 
 	"dyndns-client/internal/config"
+	"golang.org/x/term"
 )
 
+type terminalRW struct {
+	in  *os.File
+	out *os.File
+}
+
+func (trw terminalRW) Read(p []byte) (n int, err error) { return trw.in.Read(p) }
+func (trw terminalRW) Write(p []byte) (n int, err error) { return trw.out.Write(p) }
+
+func readLine(t *term.Terminal, prompt string) string {
+	t.SetPrompt(prompt)
+	line, err := t.ReadLine()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(line)
+}
+
 func RunSetup() error {
-	reader := bufio.NewReader(os.Stdin)
+	fd := int(os.Stdin.Fd())
+	if !term.IsTerminal(fd) {
+		return fmt.Errorf("stdin is not a terminal, please run the setup in an interactive shell")
+	}
 
-	fmt.Println("=== DynDNS Client Setup ===")
-	fmt.Println()
+	oldState, err := term.MakeRaw(fd)
+	if err != nil {
+		return fmt.Errorf("failed to initialize terminal: %v", err)
+	}
+	defer term.Restore(fd, oldState)
 
-	fmt.Print("Enter hostname (e.g., myhost.dynv6.net): ")
-	hostname, _ := reader.ReadString('\n')
-	hostname = strings.TrimSpace(hostname)
+	t := term.NewTerminal(terminalRW{os.Stdin, os.Stdout}, "")
+
+	t.Write([]byte("=== DynDNS Client Setup ===\r\n\r\n"))
+
+	hostname := readLine(t, "Enter hostname (e.g., myhost.dynv6.net): ")
 	if hostname == "" {
 		return fmt.Errorf("hostname is required")
 	}
 
-	fmt.Print("Enter API token: ")
-	token, _ := reader.ReadString('\n')
-	token = strings.TrimSpace(token)
+	token := readLine(t, "Enter API token: ")
 	if token == "" {
 		return fmt.Errorf("API token is required")
 	}
 
-	fmt.Println()
-	fmt.Println("Select IP version:")
-	fmt.Println("1. IPv4 only")
-	fmt.Println("2. IPv6 only")
-	fmt.Println("3. Both IPv4 and IPv6")
-	fmt.Print("Enter choice (1-3): ")
-	choice, _ := reader.ReadString('\n')
-	choice = strings.TrimSpace(choice)
+	t.Write([]byte("\r\nSelect IP version:\r\n"))
+	t.Write([]byte("1. IPv4 only\r\n"))
+	t.Write([]byte("2. IPv6 only\r\n"))
+	t.Write([]byte("3. Both IPv4 and IPv6\r\n"))
+
+	choice := readLine(t, "Enter choice (1-3): ")
 
 	var ipVersion int
 	switch choice {
@@ -50,17 +71,14 @@ func RunSetup() error {
 		ipVersion = 46
 	}
 
-	fmt.Print("Enter update interval in seconds (default 300): ")
-	intervalStr, _ := reader.ReadString('\n')
-	intervalStr = strings.TrimSpace(intervalStr)
+	intervalStr := readLine(t, "Enter update interval in seconds (default 300): ")
 	interval := 300
 	if intervalStr != "" {
 		fmt.Sscanf(intervalStr, "%d", &interval)
 	}
 
-	fmt.Print("Enable automatic updates? (Y/n): ")
-	autoUpdateStr, _ := reader.ReadString('\n')
-	autoUpdateStr = strings.TrimSpace(strings.ToLower(autoUpdateStr))
+	autoUpdateStr := readLine(t, "Enable automatic updates? (Y/n): ")
+	autoUpdateStr = strings.ToLower(autoUpdateStr)
 	autoUpdate := true
 	if autoUpdateStr == "n" || autoUpdateStr == "no" {
 		autoUpdate = false
@@ -78,10 +96,12 @@ func RunSetup() error {
 		return fmt.Errorf("failed to write config: %v", err)
 	}
 
-	fmt.Println("\nConfiguration saved to /etc/dyndns-client.conf\n")
-	fmt.Println("Do you want to install as a systemd service? (y/n)")
-	installChoice, _ := reader.ReadString('\n')
-	installChoice = strings.TrimSpace(installChoice)
+	t.Write([]byte("\r\nConfiguration saved to /etc/dyndns-client.conf\r\n\r\n"))
+
+	installChoice := readLine(t, "Do you want to install as a systemd service? (y/n): ")
+
+	// Restore the terminal state early so standard printing works again for systemd output
+	term.Restore(fd, oldState)
 
 	if strings.ToLower(installChoice) == "y" {
 		if err := InstallService(); err != nil {
