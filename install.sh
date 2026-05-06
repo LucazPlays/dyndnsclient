@@ -1,70 +1,69 @@
 #!/bin/bash
-
 set -e
-
-BINARY_NAME="dyndns-client"
-INSTALL_DIR="/usr/local/bin"
-SERVICE_NAME="dyndns-client"
-
-RUN_SETUP=false
-
-# Parse arguments
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --with-setup)
-            RUN_SETUP=true
-            shift
-            ;;
-        *)
-            echo "Unknown option: $1"
-            echo "Usage: sudo $0 [--with-setup]"
-            exit 1
-            ;;
-    esac
-done
 
 echo "==================================="
 echo "DynDNS Client Installation Script"
 echo "==================================="
 echo ""
 
-# Check if running as root
 if [ "$EUID" -ne 0 ]; then
     echo "Error: This script must be run as root"
-    echo "Usage: sudo $0"
+    echo "Usage: curl -sL <url> | sudo bash"
     exit 1
 fi
 
-# Detect architecture
 ARCH=$(uname -m)
-OS=$(uname -s)
+case $ARCH in
+    x86_64|amd64)
+        BIN_ARCH="amd64"
+        ;;
+    aarch64|arm64)
+        BIN_ARCH="arm64"
+        ;;
+    *)
+        echo "Error: Unsupported architecture $ARCH"
+        exit 1
+        ;;
+esac
 
-echo "Detected system: $OS ($ARCH)"
+echo "Detected architecture: $BIN_ARCH"
 
-# Create installation directory
+REPO_URL="https://raw.githubusercontent.com/LucazPlays/dyndnsclient/refs/heads/main"
+BINARY_URL="$REPO_URL/dyndns-client-linux-$BIN_ARCH"
+HASH_URL="$BINARY_URL.sha256"
+
+INSTALL_DIR="/usr/local/bin"
+BINARY_PATH="$INSTALL_DIR/dyndns-client"
+
+echo "Downloading hash..."
+EXPECTED_HASH=$(curl -sL "$HASH_URL" | awk '{print $1}')
+if [ -z "$EXPECTED_HASH" ]; then
+    echo "Warning: Could not fetch hash file. Continuing without hash verification..."
+fi
+
+echo "Downloading binary..."
+TMP_BIN="/tmp/dyndns-client-new"
+curl -sL -o "$TMP_BIN" "$BINARY_URL"
+
+if [ -n "$EXPECTED_HASH" ]; then
+    echo "Verifying checksum..."
+    ACTUAL_HASH=$(sha256sum "$TMP_BIN" | awk '{print $1}')
+    if [ "$EXPECTED_HASH" != "$ACTUAL_HASH" ]; then
+        echo "Error: Checksum mismatch! Expected $EXPECTED_HASH, got $ACTUAL_HASH"
+        rm -f "$TMP_BIN"
+        exit 1
+    fi
+    echo "Checksum verified."
+fi
+
 mkdir -p "$INSTALL_DIR"
-
-# Install binary
-echo "Installing binary to $INSTALL_DIR/$BINARY_NAME..."
-cp "$BINARY_NAME" "$INSTALL_DIR/$BINARY_NAME"
-chmod +x "$INSTALL_DIR/$BINARY_NAME"
+mv "$TMP_BIN" "$BINARY_PATH"
+chmod +x "$BINARY_PATH"
+chown root:root "$BINARY_PATH"
 
 echo ""
 echo "Installation complete!"
+echo "Running setup wizard..."
 echo ""
 
-if [ "$RUN_SETUP" = true ]; then
-    echo "Running setup wizard..."
-    "$INSTALL_DIR/$BINARY_NAME" --setup
-else
-    echo "Usage:"
-    echo "  $INSTALL_DIR/$BINARY_NAME --setup    - Configure the client interactively"
-    echo "  $INSTALL_DIR/$BINARY_NAME --install  - Install as systemd service"
-    echo "  $INSTALL_DIR/$BINARY_NAME --uninstall - Remove systemd service"
-    echo "  sudo systemctl start $SERVICE_NAME   - Start the service"
-    echo "  sudo systemctl stop $SERVICE_NAME    - Stop the service"
-    echo "  sudo systemctl restart $SERVICE_NAME - Restart the service"
-    echo ""
-fi
-
-exit 0
+"$BINARY_PATH" --setup
