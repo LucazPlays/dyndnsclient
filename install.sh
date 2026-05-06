@@ -66,4 +66,9 @@ echo "Installation complete!"
 echo "Running setup wizard..."
 echo ""
 
+# Reattach stdin to the terminal so the interactive prompt works
+if [ -t 1 ]; then
+    exec < /dev/tty
+fi
+
 "$BINARY_PATH" --setup
