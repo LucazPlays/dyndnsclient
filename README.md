@@ -1,73 +1,56 @@
 # DynDNS Client
 
-**Quick install:** Download and run the internet installer in one line:
+A robust, professional Dynamic DNS client written in Go for Linux (Debian/Ubuntu/CentOS, etc.) with native systemd support, multi-architecture builds (x86_64 / ARM64), and automatic updates.
+
+**Quick Install & Setup:** Download and run the smart installer in one line:
 
 ```bash
-wget -qO- https://raw.githubusercontent.com/LucazPlays/dyndnsclient/refs/heads/main/internet-install.sh | sudo bash
+curl -sL https://raw.githubusercontent.com/LucazPlays/dyndnsclient/refs/heads/main/install.sh | sudo bash
 ```
-
-A Dynamic DNS client written in Go for Linux Debian with systemd support.
 
 ## Features
 
-- Supports DynV6.com API
-- IPv4 and/or IPv6 address detection
-- Configurable update interval
-- systemd service integration
-- Interactive setup wizard
+- **Multi-Architecture**: Automatically detects your system (amd64 / arm64) and installs the correct binary.
+- **Smart Auto-Updater**: Background daemon checks for new versions via SHA256 hashes every 24 hours and updates automatically.
+- **DynV6.com API**: First-class support for updating DynV6.
+- **Dual-Stack IP Support**: Intelligent IPv4 (via API) and IPv6 (via local network interfaces) address detection.
+- **systemd Integration**: Easily install as a reliable background service.
+- **Interactive Setup Wizard**: Get up and running in seconds without editing config files manually.
 
 ## Installation
 
+### Internet Installer (Recommended)
+
+The recommended way to install is via our smart script. It detects your CPU architecture, verifies file checksums, installs the client, and launches the setup wizard automatically:
+
+```bash
+curl -sL https://raw.githubusercontent.com/LucazPlays/dyndnsclient/refs/heads/main/install.sh | sudo bash
+```
+
 ### From Source
+
+If you prefer building from source:
 
 ```bash
 # Clone or navigate to the project directory
+git clone https://github.com/LucazPlays/dyndnsclient.git
 cd dyndnsclient
 
-# Run the installation script
-sudo ./install.sh
-
-# Or use make
-make
-sudo make install
-```
-
-### Manual Installation
-
-```bash
 # Build the binary
-go build -o dyndns-client .
+make build
 
 # Install the binary
-sudo cp dyndns-client /usr/local/bin/
-sudo chmod +x /usr/local/bin/dyndns-client
+sudo make install
 ```
-
-### Internet installer
-
-You can install directly from the raw GitHub files (useful for quick installs):
-
-```bash
-# Run the internet installer which downloads the binary and runs the installer
-wget -qO- https://raw.githubusercontent.com/LucazPlays/dyndnsclient/refs/heads/main/internet-install.sh | sudo bash
-```
-
-### Self-update (from raw GitHub)
-
-If you installed via the internet installer, you can update the installed binary using the update script:
-
-```bash
-sudo /usr/local/bin/dyndns-client --update
-```
-
-The update command downloads the latest prebuilt binary from the repository's main branch and replaces the installed binary. Make sure you trust the source and run this on a machine you control.
 
 ## Configuration
 
 ### Interactive Setup
 
+If you didn't use the automated install script, you can run the setup wizard manually:
+
 ```bash
-sudo /usr/local/bin/dyndns-client --setup
+sudo dyndns-client --setup
 ```
 
 The setup wizard will prompt you for:
@@ -78,13 +61,13 @@ The setup wizard will prompt you for:
 
 ### Manual Configuration
 
-Create `/etc/dyndns-client.conf`:
+If you prefer, you can manually create `/etc/dyndns-client.conf`:
 
 ```ini
 hostname=myhost.dynv6.net
 token=your-api-token
 ip_version=46  # 4=IPv4 only, 6=IPv6 only, 46=both
-interval=300   # seconds
+interval=300   # Update interval in seconds
 ```
 
 ## Service Management
@@ -92,51 +75,54 @@ interval=300   # seconds
 ### Install as Service
 
 ```bash
-sudo /usr/local/bin/dyndns-client --install
+sudo dyndns-client --install
 ```
 
 ### Control Service
 
 ```bash
-# Start the service
 sudo systemctl start dyndns-client
-
-# Stop the service
 sudo systemctl stop dyndns-client
-
-# Restart the service
 sudo systemctl restart dyndns-client
-
-# Check status
 sudo systemctl status dyndns-client
 ```
 
 ### Uninstall
 
 ```bash
-sudo /usr/local/bin/dyndns-client --uninstall
-
-# Or use the uninstall script
+sudo dyndns-client --uninstall
+# Or use the uninstall script if you have the source code
 sudo ./uninstall.sh
-
-# Or use make
-make uninstall
 ```
 
-## Usage Without Service
+## Updates
 
-Run in foreground (for testing):
+### Automatic Updates
+
+The `dyndns-client` daemon will check for updates every 24 hours. If it detects a newer version (based on the SHA256 hash on GitHub), it will download it, verify the hash, replace the binary, and gracefully restart the service.
+
+### Manual Self-Update
+
+You can also force a self-update manually at any time:
 
 ```bash
-/usr/local/bin/dyndns-client
+sudo dyndns-client --update
+```
+
+## Development
+
+To build binaries for both `amd64` and `arm64` along with their hash checksums, run:
+
+```bash
+make hashes
 ```
 
 ## Files
 
-- Binary: `/usr/local/bin/dyndns-client`
-- Config: `/etc/dyndns-client.conf`
-- Service: `/etc/systemd/system/dyndns-client.service`
-- Cache: `~/.dyndns-client.addr`
+- **Binary**: `/usr/local/bin/dyndns-client`
+- **Config**: `/etc/dyndns-client.conf`
+- **Service**: `/etc/systemd/system/dyndns-client.service`
+- **Cache**: `~/.dyndns-client.addr`
 
 ## License
 
