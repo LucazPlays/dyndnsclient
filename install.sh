@@ -66,9 +66,10 @@ echo "Installation complete!"
 echo "Running setup wizard..."
 echo ""
 
-# Reattach stdin to the terminal so the interactive prompt works
-if [ -t 1 ]; then
-    exec < /dev/tty
+# Force stdin to read from the terminal so that interactive prompts work correctly
+# even if the script is run via curl | bash
+if [ -c /dev/tty ]; then
+    "$BINARY_PATH" --setup < /dev/tty
+else
+    "$BINARY_PATH" --setup
 fi
-
-"$BINARY_PATH" --setup

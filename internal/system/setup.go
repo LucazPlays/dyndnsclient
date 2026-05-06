@@ -6,17 +6,10 @@ import (
 	"os"
 	"strings"
 
-	"golang.org/x/term"
 	"dyndns-client/internal/config"
 )
 
 func RunSetup() error {
-	fd := int(os.Stdin.Fd())
-	oldState, err := term.MakeRaw(fd)
-	if err == nil {
-		defer term.Restore(fd, oldState)
-	}
-
 	reader := bufio.NewReader(os.Stdin)
 
 	fmt.Println("=== DynDNS Client Setup ===")
