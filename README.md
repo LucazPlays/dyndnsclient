@@ -68,6 +68,7 @@ hostname=myhost.dynv6.net
 token=your-api-token
 ip_version=46  # 4=IPv4 only, 6=IPv6 only, 46=both
 interval=300   # Update interval in seconds
+auto_update=true # Set to false to disable automatic daily updates
 ```
 
 ## Service Management

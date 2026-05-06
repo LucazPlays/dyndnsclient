@@ -65,11 +65,20 @@ func RunSetup() error {
 		fmt.Sscanf(intervalStr, "%d", &interval)
 	}
 
+	fmt.Print("Enable automatic updates? (Y/n): ")
+	autoUpdateStr, _ := reader.ReadString('\n')
+	autoUpdateStr = strings.TrimSpace(strings.ToLower(autoUpdateStr))
+	autoUpdate := true
+	if autoUpdateStr == "n" || autoUpdateStr == "no" {
+		autoUpdate = false
+	}
+
 	cfg := &config.Config{
-		Hostname:  hostname,
-		Token:     token,
-		IPVersion: ipVersion,
-		Interval:  interval,
+		Hostname:   hostname,
+		Token:      token,
+		IPVersion:  ipVersion,
+		Interval:   interval,
+		AutoUpdate: autoUpdate,
 	}
 
 	if err := config.Save(cfg); err != nil {

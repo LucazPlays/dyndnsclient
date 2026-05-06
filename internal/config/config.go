@@ -7,10 +7,11 @@ import (
 )
 
 type Config struct {
-	Hostname  string
-	Token     string
-	IPVersion int
-	Interval  int
+	Hostname   string
+	Token      string
+	IPVersion  int
+	Interval   int
+	AutoUpdate bool
 }
 
 const ConfigPath = "/etc/dyndns-client.conf"
@@ -21,7 +22,9 @@ func Load() (*Config, error) {
 		return nil, err
 	}
 
-	config := &Config{}
+	config := &Config{
+		AutoUpdate: true, // default if not set
+	}
 	for _, line := range strings.Split(string(data), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -35,6 +38,9 @@ func Load() (*Config, error) {
 			fmt.Sscanf(strings.TrimPrefix(line, "ip_version="), "%d", &config.IPVersion)
 		} else if strings.HasPrefix(line, "interval=") {
 			fmt.Sscanf(strings.TrimPrefix(line, "interval="), "%d", &config.Interval)
+		} else if strings.HasPrefix(line, "auto_update=") {
+			val := strings.TrimPrefix(line, "auto_update=")
+			config.AutoUpdate = (val == "true" || val == "1")
 		}
 	}
 
@@ -48,7 +54,7 @@ func Load() (*Config, error) {
 }
 
 func Save(config *Config) error {
-	content := fmt.Sprintf("hostname=%s\ntoken=%s\nip_version=%d\ninterval=%d\n",
-		config.Hostname, config.Token, config.IPVersion, config.Interval)
+	content := fmt.Sprintf("hostname=%s\ntoken=%s\nip_version=%d\ninterval=%d\nauto_update=%t\n",
+		config.Hostname, config.Token, config.IPVersion, config.Interval, config.AutoUpdate)
 	return os.WriteFile(ConfigPath, []byte(content), 0600)
 }

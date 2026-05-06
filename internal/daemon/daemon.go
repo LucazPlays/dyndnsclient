@@ -30,9 +30,14 @@ func Run() {
 	updateTicker := time.NewTicker(time.Duration(cfg.Interval) * time.Second)
 	defer updateTicker.Stop()
 
-	// Check for auto-updates once a day
-	autoUpdateTicker := time.NewTicker(24 * time.Hour)
-	defer autoUpdateTicker.Stop()
+	var autoUpdateChan <-chan time.Time
+	if cfg.AutoUpdate {
+		autoUpdateTicker := time.NewTicker(24 * time.Hour)
+		defer autoUpdateTicker.Stop()
+		autoUpdateChan = autoUpdateTicker.C
+	} else {
+		autoUpdateChan = make(chan time.Time) // Dummy channel
+	}
 
 	doUpdate(cfg, p)
 
@@ -43,7 +48,7 @@ func Run() {
 			return
 		case <-updateTicker.C:
 			doUpdate(cfg, p)
-		case <-autoUpdateTicker.C:
+		case <-autoUpdateChan:
 			slog.Info("Checking for automatic updates...")
 			updated, err := updater.PerformSelfUpdate()
 			if err != nil {
